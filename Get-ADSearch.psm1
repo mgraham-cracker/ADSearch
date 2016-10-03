@@ -223,35 +223,34 @@
                 @{Name="JoinAccount_RootSamAccountName";Expression={$null}}, `
                 @{Name="JoinAccount_SID";Expression={$null}}
         }
-        if($JoinType -eq "inner" -or $JoinType -eq "full")
+
+        foreach($AccountMatch in $($Compare_AccountList | Where-Object {$_.SideIndicator -eq "=="}))
         {
-            foreach($AccountMatch in $($Compare_AccountList | Where-Object {$_.SideIndicator -eq "=="}))
+            $Accounts = $AccountList | Where-Object {$_.SID -eq $AccountMatch.SID}
+            $JoinAccounts = $JoinAccountList | Where-Object {$_.SID -eq $AccountMatch.SID}
+            foreach($Account in $Accounts)
             {
-                $Accounts = $AccountList | Where-Object {$_.SID -eq $AccountMatch.SID}
-                $JoinAccounts = $JoinAccountList | Where-Object {$_.SID -eq $AccountMatch.SID}
-                foreach($Account in $Accounts)
+                foreach($JoinAccount in $JoinAccounts)
                 {
-                    foreach($JoinAccount in $JoinAccounts)
-                    {
-                        $Join_AccountList += $Account | 
-                        Select @{Name="Account_ObjectClass";Expression={$_.ObjectClass}}, `
-                        @{Name="Account_DNSRoot";Expression={$_.DNSRoot}}, `
-                        @{Name="Account_RootSamAccountName";Expression={$_.RootSamAccountName}}, `
-                        @{Name="Account_SamAccountName";Expression={$_.SamAccountName}}, `
-                        @{Name="JoinAccount_ObjectClass";Expression={$JoinAccount.ObjectClass}}, `
-                        @{Name="JoinAccount_SamAccountName";Expression={$JoinAccount.SamAccountName}}, `
-                        @{Name="Account_Comment";Expression={$_.Comment}}, `
-                        @{Name="JoinAccount_Comment";Expression={$JoinAccount.Comment}}, `
-                        @{Name="Account_DN";Expression={$_.DN}}, `
-                        @{Name="Account_SID";Expression={$_.SID}}, `
-                        @{Name="JoinAccount_DN";Expression={$JoinAccount.DN}}, `                        
-                        @{Name="JoinAccount_DNSRoot";Expression={$JoinAccount.DNSRoot}}, `
-                        @{Name="JoinAccount_RootSamAccountName";Expression={$JoinAccount.RootSamAccountName}}, `
-                        @{Name="JoinAccount_SID";Expression={$JoinAccount.SID}}
-                    }
+                    $Join_AccountList += $Account | 
+                    Select @{Name="Account_ObjectClass";Expression={$_.ObjectClass}}, `
+                    @{Name="Account_DNSRoot";Expression={$_.DNSRoot}}, `
+                    @{Name="Account_RootSamAccountName";Expression={$_.RootSamAccountName}}, `
+                    @{Name="Account_SamAccountName";Expression={$_.SamAccountName}}, `
+                    @{Name="JoinAccount_ObjectClass";Expression={$JoinAccount.ObjectClass}}, `
+                    @{Name="JoinAccount_SamAccountName";Expression={$JoinAccount.SamAccountName}}, `
+                    @{Name="Account_Comment";Expression={$_.Comment}}, `
+                    @{Name="JoinAccount_Comment";Expression={$JoinAccount.Comment}}, `
+                    @{Name="Account_DN";Expression={$_.DN}}, `
+                    @{Name="Account_SID";Expression={$_.SID}}, `
+                    @{Name="JoinAccount_DN";Expression={$JoinAccount.DN}}, `                        
+                    @{Name="JoinAccount_DNSRoot";Expression={$JoinAccount.DNSRoot}}, `
+                    @{Name="JoinAccount_RootSamAccountName";Expression={$JoinAccount.RootSamAccountName}}, `
+                    @{Name="JoinAccount_SID";Expression={$JoinAccount.SID}}
                 }
             }
         }
+        
         $AccountList = $Join_AccountList
                    
     }
