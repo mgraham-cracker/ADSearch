@@ -63,7 +63,7 @@
     .PARAMETER DomainServer
         'DomainServer' [string]
 
-        The default value is optained from (Get-ADDomain -Current LocalComputer).DNSRoot if not specified
+        The default value is obtained from (Get-ADDomain -Current LocalComputer).DNSRoot if not specified
 
         Note: If you have multiple domain trust the search be aware that the relationship search will navigate down permission trees
         in other domains if users or groups from those other domains are related to users or groups within your search domain.
@@ -101,6 +101,30 @@
         Admins<-Dev-Admins<-Bob
         Admins->US-Admins
         Admins->US-Admins<-Global-Admins
+
+    .PARAMETER JoinType
+        'JoinType' [string]  Values allowed "left", "right", "inner"
+
+        This parameter is used dependent on the JoinAccountName parameter being specified.
+
+        "left" = Return all groups AccountName is a member of and only matching groups that JoinAccountName are a member of
+        "right" = Return all groups JoinAccountName are a member of and only matching groups that AccountName are a member of
+        "inner" = Return only members of groups that match between JoinAccountName and AccountName
+        "full" = Return all members of groups from JoinAccountName and AccountName whether they match or not
+
+    .PARAMETER JoinAccountName
+        'JoinAccountName' [string] 
+
+        This parameter is used dependent on the JoinType parameter being specified.
+        It is recommended to not use wildcards when trying to use the join parameters.
+        This value will be used to search SamAccountName values in the active directory
+
+    .PARAMETER JoinDistinct
+        'JoinDistinct' [string]  Values allowed "true" [default] or "false"
+
+        This parameter is used to limit the comparison sets to unique list by excluding the Comment field.
+        The comment field list the inheritance path giving the accounts permissions. If wish to see the inheritance path
+        you will need to set this value to false.
 
     .PARAMETER Output
         'Output' [string] Values allowed are "grid" or "pipeline"
