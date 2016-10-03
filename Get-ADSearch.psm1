@@ -65,7 +65,7 @@
     .PARAMETER DomainServer
         'DomainServer' [string]
 
-        The default value is optained from (Get-ADDomain -Current LocalComputer).DNSRoot if not specified
+        The default value is obtained from (Get-ADDomain -Current LocalComputer).DNSRoot if not specified
 
         Note: If you have multiple domain trust the search be aware that the relationship search will navigate down permission trees
         in other domains if users or groups from those other domains are related to users or groups within your search domain.
@@ -104,6 +104,30 @@
         Admins->US-Admins
         Admins->US-Admins<-Global-Admins
 
+    .PARAMETER JoinType
+        'JoinType' [string]  Values allowed "left", "right", "inner"
+
+        This parameter is used dependent on the JoinAccountName parameter being specified.
+
+        "left" = Return all groups AccountName is a member of and only matching groups that JoinAccountName are a member of
+        "right" = Return all groups JoinAccountName are a member of and only matching groups that AccountName are a member of
+        "inner" = Return only members of groups that match between JoinAccountName and AccountName
+        "full" = Return all members of groups from JoinAccountName and AccountName whether they match or not
+
+    .PARAMETER JoinAccountName
+        'JoinAccountName' [string] 
+
+        This parameter is used dependent on the JoinType parameter being specified.
+        It is recommended to not use wildcards when trying to use the join parameters.
+        This value will be used to search SamAccountName values in the active directory
+
+    .PARAMETER JoinDistinct
+        'JoinDistinct' [string]  Values allowed "true" [default] or "false"
+
+        This parameter is used to limit the comparison sets to unique list by excluding the Comment field.
+        The comment field list the inheritance path giving the accounts permissions. If wish to see the inheritance path
+        you will need to set this value to false.
+
     .PARAMETER Output
         'Output' [string] Values allowed are "grid" or "pipeline"
 
@@ -127,14 +151,116 @@
     [Parameter(mandatory=$false,Position=3
         ,HelpMessage="users, groups, none [default]")][String] $MemberSearchExclude = "none",
     [Parameter(mandatory=$false,Position=4
+        ,HelpMessage="left, right, inner, full [default]")][String] $JoinType = "full",
+    [Parameter(mandatory=$false,Position=5
+        ,HelpMessage="Supply an AD User or Group Name.")][String] $JoinAccountName,
+    [Parameter(mandatory=$false,Position=6
+        ,HelpMessage="true [default], false")][String] $JoinDistinct = "true",
+    [Parameter(mandatory=$false,Position=7
         ,HelpMessage="grid [Default], pipeline")][String] $Output = "grid"
     )
 
     $AccountList = Get-ADMembershipList -AccountName $AccountName -DomainServer $DomainServer -GroupSearchMethod $GroupSearchMethod -MemberSearchExclude $MemberSearchExclude
 
+    if($JoinAccountName)
+    {
+        $JoinAccountList = Get-ADMembershipList -AccountName $JoinAccountName -DomainServer $DomainServer -GroupSearchMethod $GroupSearchMethod -MemberSearchExclude $MemberSearchExclude
+        #Limit Columns helpful to comparison columns
+        if($JoinDistinct -eq "true")
+        {
+            $JoinAccountList = $JoinAccountList | 
+                Select ObjectClass, DNSRoot, SamAccountName, DN, RootSamAccountName, SID -Unique
+
+
+            $AccountList = $AccountList | 
+                Select ObjectClass, DNSRoot, SamAccountName, DN, RootSamAccountName, SID -Unique
+        }
+        else
+        {
+            $JoinAccountList = $JoinAccountList | 
+                Select ObjectClass, DNSRoot, SamAccountName, Comment, DN, RootSamAccountName, SID
+
+            $AccountList = $AccountList | 
+                Select ObjectClass, DNSRoot, SamAccountName, Comment, DN, RootSamAccountName, SID
+        }
+        $Compare_AccountList = Compare-Object -ReferenceObject $AccountList -DifferenceObject $JoinAccountList -IncludeEqual -Property SID -PassThru
+        
+        $Join_AccountList=@()
+
+        if($JoinType -eq "right" -or $JoinType -eq "full")
+        {
+            $Join_AccountList += $Compare_AccountList | Where-Object {$_.SideIndicator -eq "=>"} |
+                Select @{Name="Account_ObjectClass";Expression={$null}}, `
+                @{Name="Account_DNSRoot";Expression={$null}}, `
+                @{Name="Account_RootSamAccountName";Expression={$null}}, `
+                @{Name="Account_SamAccountName";Expression={$null}}, `
+                @{Name="JoinAccount_ObjectClass";Expression={$_.ObjectClass}}, `
+                @{Name="JoinAccount_SamAccountName";Expression={$_.SamAccountName}}, `
+                @{Name="Account_Comment";Expression={$null}}, `
+                @{Name="JoinAccount_Comment";Expression={$_.Comment}}, `
+                @{Name="Account_DN";Expression={$null}}, `
+                @{Name="Account_SID";Expression={$null}}, `
+                @{Name="JoinAccount_DN";Expression={$_.DN}}, `
+                @{Name="JoinAccount_DNSRoot";Expression={$_.DNSRoot}}, `
+                @{Name="JoinAccount_RootSamAccountName";Expression={$_.RootSamAccountName}}, `
+                @{Name="JoinAccount_SID";Expression={$_.SID}}
+        }
+        if($JoinType -eq "left" -or $JoinType -eq "full")
+        {
+            $Join_AccountList += $Compare_AccountList | Where-Object {$_.SideIndicator -eq "<="} |
+                Select @{Name="Account_ObjectClass";Expression={$_.ObjectClass}}, `
+                @{Name="Account_DNSRoot";Expression={$_.DNSRoot}}, `
+                @{Name="Account_RootSamAccountName";Expression={$_.RootSamAccountName}}, `
+                @{Name="Account_SamAccountName";Expression={$_.SamAccountName}}, `
+                @{Name="JoinAccount_ObjectClass";Expression={$null}}, `
+                @{Name="JoinAccount_SamAccountName";Expression={$null}}, `
+                @{Name="Account_Comment";Expression={$_.Comment}}, `
+                @{Name="JoinAccount_Comment";Expression={$null}}, `
+                @{Name="Account_DN";Expression={$_.DN}}, `
+                @{Name="Account_SID";Expression={$_.SID}}, `
+                @{Name="JoinAccount_DN";Expression={$null}}, `
+                @{Name="JoinAccount_DNSRoot";Expression={$null}}, `
+                @{Name="JoinAccount_RootSamAccountName";Expression={$null}}, `
+                @{Name="JoinAccount_SID";Expression={$null}}
+        }
+        if($JoinType -eq "inner" -or $JoinType -eq "full")
+        {
+            foreach($AccountMatch in $($Compare_AccountList | Where-Object {$_.SideIndicator -eq "=="}))
+            {
+                $Accounts = $AccountList | Where-Object {$_.SID -eq $AccountMatch.SID}
+                $JoinAccounts = $JoinAccountList | Where-Object {$_.SID -eq $AccountMatch.SID}
+                foreach($Account in $Accounts)
+                {
+                    foreach($JoinAccount in $JoinAccounts)
+                    {
+                        $Join_AccountList += $Account | 
+                        Select @{Name="Account_ObjectClass";Expression={$_.ObjectClass}}, `
+                        @{Name="Account_DNSRoot";Expression={$_.DNSRoot}}, `
+                        @{Name="Account_RootSamAccountName";Expression={$_.RootSamAccountName}}, `
+                        @{Name="Account_SamAccountName";Expression={$_.SamAccountName}}, `
+                        @{Name="JoinAccount_ObjectClass";Expression={$JoinAccount.ObjectClass}}, `
+                        @{Name="JoinAccount_SamAccountName";Expression={$JoinAccount.SamAccountName}}, `
+                        @{Name="Account_Comment";Expression={$_.Comment}}, `
+                        @{Name="JoinAccount_Comment";Expression={$JoinAccount.Comment}}, `
+                        @{Name="Account_DN";Expression={$_.DN}}, `
+                        @{Name="Account_SID";Expression={$_.SID}}, `
+                        @{Name="JoinAccount_DN";Expression={$JoinAccount.DN}}, `                        
+                        @{Name="JoinAccount_DNSRoot";Expression={$JoinAccount.DNSRoot}}, `
+                        @{Name="JoinAccount_RootSamAccountName";Expression={$JoinAccount.RootSamAccountName}}, `
+                        @{Name="JoinAccount_SID";Expression={$JoinAccount.SID}}
+                    }
+                }
+            }
+        }
+        $AccountList = $Join_AccountList
+                   
+    }
+
     if($Output -eq "grid")
     {
-        $AccountList | Out-Gridview -Title "Search Results For: $AccountName"
+        $AccountList | Sort-Object -Property dnsroot, account_dnsroot, joinaccount_dnsroot, rootsamaccountname, account_rootsamaccountname, `
+            joinaccount_rootsamaccountname, samaccountname, account_samaccountname, joinaccount_samaccountname |
+            Out-Gridview -Title "Search Results For: $AccountName"
     }
     else
     {
