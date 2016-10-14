@@ -137,7 +137,7 @@
     
 
     .FUNCTIONALITY
-        PowerShell Language
+        Active Directory Utility
 
     #>
     [CmdletBinding()]
