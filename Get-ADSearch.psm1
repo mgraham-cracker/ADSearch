@@ -145,19 +145,19 @@
     [Parameter(ValuefromPipeline=$true,mandatory=$true,Position=0
         ,HelpMessage="Supply an AD User or Group Name.")][String] $AccountName,
     [Parameter(mandatory=$false,Position=1
-        ,HelpMessage="all, membersonly, membersofonly [default]")][String] $GroupSearchMethod = "membersofonly",
+        ,HelpMessage="all, membersonly, membersofonly [default]")][String][ValidateSet("all", "membersonly", "membersofonly")]  $GroupSearchMethod = "membersofonly",
     [Parameter(mandatory=$false,Position=2)][String] $DomainServer = 
         (Get-ADDomain -Current LocalComputer).DNSRoot,
     [Parameter(mandatory=$false,Position=3
-        ,HelpMessage="users, groups, none [default]")][String] $MemberSearchExclude = "none",
+        ,HelpMessage="users, groups, none [default]")][String][ValidateSet("none", "groups", "users")]  $MemberSearchExclude = "none",
     [Parameter(mandatory=$false,Position=4
-        ,HelpMessage="left, right, inner, full [default]")][String] $JoinType = "full",
+        ,HelpMessage="left, right, inner, full [default]")][String][ValidateSet("left", "right", "inner", "full")]  $JoinType = "full",
     [Parameter(mandatory=$false,Position=5
         ,HelpMessage="Supply an AD User or Group Name.")][String] $JoinAccountName,
     [Parameter(mandatory=$false,Position=6
-        ,HelpMessage="true [default], false")][String] $JoinDistinct = "true",
+        ,HelpMessage="true [default], false")][String][ValidateSet("true", "false")]  $JoinDistinct = "true",
     [Parameter(mandatory=$false,Position=7
-        ,HelpMessage="grid [Default], pipeline")][String] $Output = "grid"
+        ,HelpMessage="grid [Default], pipeline")][String][ValidateSet("grid", "pipeline")]  $Output = "grid"
     )
 
     $AccountList = Get-ADMembershipList -AccountName $AccountName -DomainServer $DomainServer -GroupSearchMethod $GroupSearchMethod -MemberSearchExclude $MemberSearchExclude
