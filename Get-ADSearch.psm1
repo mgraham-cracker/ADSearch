@@ -1,4 +1,4 @@
-﻿function Get-ADSearch
+function Get-ADSearch
 {
  <#
     .SYNOPSIS
@@ -134,6 +134,14 @@
         The default value is grid which is intended for interactive use
 
         Note: Data in the output grid can be copied to the clipboard, filtered, and columns rearranged.
+
+    .PARAMETER Mode
+        'Mode' [string] Values allowed are "speed" or "robust"
+
+        The default value is speed which is intended to perform a quick memberof search for a user. This feature presumes you do
+        not wish to perform comparison or multi-direction searches
+
+        Note: If you specify a value for JoinAccountName then the mode will be overridden to robust
     
 
     .FUNCTIONALITY
@@ -157,104 +165,136 @@
     [Parameter(mandatory=$false,Position=6
         ,HelpMessage="true [default], false")][String][ValidateSet("true", "false")]  $JoinDistinct = "true",
     [Parameter(mandatory=$false,Position=7
-        ,HelpMessage="grid [Default], pipeline")][String][ValidateSet("grid", "pipeline")]  $Output = "grid"
+        ,HelpMessage="grid [Default], pipeline")][String][ValidateSet("grid", "pipeline")]  $Output = "grid",
+    [Parameter(mandatory=$false,Position=8
+        ,HelpMessage="speed [Default], robust")][String][ValidateSet("speed", "robust")]  $Mode = "speed"
     )
-
-    $AccountList = Get-ADMembershipList -AccountName $AccountName -DomainServer $DomainServer -GroupSearchMethod $GroupSearchMethod -MemberSearchExclude $MemberSearchExclude
-
-    if($JoinAccountName)
+    
+    if($Mode -eq "robust" -or $JoinAccountName)
     {
-        $JoinAccountList = Get-ADMembershipList -AccountName $JoinAccountName -DomainServer $DomainServer -GroupSearchMethod $GroupSearchMethod -MemberSearchExclude $MemberSearchExclude
-        #Limit Columns helpful to comparison columns
-        if($JoinDistinct -eq "true")
-        {
-            $JoinAccountList = $JoinAccountList | 
-                Select ObjectClass, DNSRoot, SamAccountName, DN, RootSamAccountName, SID -Unique
+        $stime=(Get-Date)
+        $AccountList = Get-ADMembershipList -AccountName $AccountName -DomainServer $DomainServer -GroupSearchMethod $GroupSearchMethod -MemberSearchExclude $MemberSearchExclude
+        $etime=(Get-Date)
+        Write-Verbose "$($etime-$stime) AccountName Search Completed"
 
-
-            $AccountList = $AccountList | 
-                Select ObjectClass, DNSRoot, SamAccountName, DN, RootSamAccountName, SID -Unique
-        }
-        else
+        if($JoinAccountName)
         {
-            $JoinAccountList = $JoinAccountList | 
-                Select ObjectClass, DNSRoot, SamAccountName, Comment, DN, RootSamAccountName, SID
-
-            $AccountList = $AccountList | 
-                Select ObjectClass, DNSRoot, SamAccountName, Comment, DN, RootSamAccountName, SID
-        }
-        $Compare_AccountList = Compare-Object -ReferenceObject $AccountList -DifferenceObject $JoinAccountList -IncludeEqual -Property SID -PassThru
-        
-        $Join_AccountList=@()
-
-        if($JoinType -eq "right" -or $JoinType -eq "full")
-        {
-            $Join_AccountList += $Compare_AccountList | Where-Object {$_.SideIndicator -eq "=>"} |
-                Select @{Name="Account_ObjectClass";Expression={$null}}, `
-                @{Name="Account_DNSRoot";Expression={$null}}, `
-                @{Name="Account_RootSamAccountName";Expression={$null}}, `
-                @{Name="Account_SamAccountName";Expression={$null}}, `
-                @{Name="JoinAccount_ObjectClass";Expression={$_.ObjectClass}}, `
-                @{Name="JoinAccount_SamAccountName";Expression={$_.SamAccountName}}, `
-                @{Name="Account_Comment";Expression={$null}}, `
-                @{Name="JoinAccount_Comment";Expression={$_.Comment}}, `
-                @{Name="Account_DN";Expression={$null}}, `
-                @{Name="Account_SID";Expression={$null}}, `
-                @{Name="JoinAccount_DN";Expression={$_.DN}}, `
-                @{Name="JoinAccount_DNSRoot";Expression={$_.DNSRoot}}, `
-                @{Name="JoinAccount_RootSamAccountName";Expression={$_.RootSamAccountName}}, `
-                @{Name="JoinAccount_SID";Expression={$_.SID}}
-        }
-        if($JoinType -eq "left" -or $JoinType -eq "full")
-        {
-            $Join_AccountList += $Compare_AccountList | Where-Object {$_.SideIndicator -eq "<="} |
-                Select @{Name="Account_ObjectClass";Expression={$_.ObjectClass}}, `
-                @{Name="Account_DNSRoot";Expression={$_.DNSRoot}}, `
-                @{Name="Account_RootSamAccountName";Expression={$_.RootSamAccountName}}, `
-                @{Name="Account_SamAccountName";Expression={$_.SamAccountName}}, `
-                @{Name="JoinAccount_ObjectClass";Expression={$null}}, `
-                @{Name="JoinAccount_SamAccountName";Expression={$null}}, `
-                @{Name="Account_Comment";Expression={$_.Comment}}, `
-                @{Name="JoinAccount_Comment";Expression={$null}}, `
-                @{Name="Account_DN";Expression={$_.DN}}, `
-                @{Name="Account_SID";Expression={$_.SID}}, `
-                @{Name="JoinAccount_DN";Expression={$null}}, `
-                @{Name="JoinAccount_DNSRoot";Expression={$null}}, `
-                @{Name="JoinAccount_RootSamAccountName";Expression={$null}}, `
-                @{Name="JoinAccount_SID";Expression={$null}}
-        }
-
-        foreach($AccountMatch in $($Compare_AccountList | Where-Object {$_.SideIndicator -eq "=="}))
-        {
-            $Accounts = $AccountList | Where-Object {$_.SID -eq $AccountMatch.SID}
-            $JoinAccounts = $JoinAccountList | Where-Object {$_.SID -eq $AccountMatch.SID}
-            foreach($Account in $Accounts)
+        $stime=(Get-Date)
+            $JoinAccountList = Get-ADMembershipList -AccountName $JoinAccountName -DomainServer $DomainServer -GroupSearchMethod $GroupSearchMethod -MemberSearchExclude $MemberSearchExclude
+            $etime=(Get-Date)
+            Write-Verbose "$($etime-$stime) JoinAccountName Search Completed"
+            #Limit Columns helpful to comparison columns
+            if($JoinDistinct -eq "true")
             {
-                foreach($JoinAccount in $JoinAccounts)
-                {
-                    $Join_AccountList += $Account | 
+            $stime=(Get-Date)
+                $JoinAccountList = $JoinAccountList | 
+                    Select ObjectClass, DNSRoot, SamAccountName, DN, RootSamAccountName, SID -Unique
+                    $etime=(Get-Date)
+                    Write-Verbose "$($etime-$stime) AccountName Unique Filter Completed"
+
+            $stime=(Get-Date)
+                $AccountList = $AccountList | 
+                    Select ObjectClass, DNSRoot, SamAccountName, DN, RootSamAccountName, SID -Unique
+                    $etime=(Get-Date)
+                    Write-Verbose "$($etime-$stime) JoinAccountName Unique Filter Completed"
+            }
+            else
+            {
+                $JoinAccountList = $JoinAccountList | 
+                    Select ObjectClass, DNSRoot, SamAccountName, Comment, DN, RootSamAccountName, SID
+
+                $AccountList = $AccountList | 
+                    Select ObjectClass, DNSRoot, SamAccountName, Comment, DN, RootSamAccountName, SID
+            }
+            $stime=(Get-Date)
+            $Compare_AccountList = Compare-Object -ReferenceObject $AccountList -DifferenceObject $JoinAccountList -IncludeEqual -Property SID -PassThru
+            $etime=(Get-Date)
+            Write-Verbose "$($etime-$stime) Compare Completed"
+
+            $Join_AccountList=@()
+
+            if($JoinType -eq "right" -or $JoinType -eq "full")
+            {
+            $stime=(Get-Date)
+                $Join_AccountList += $Compare_AccountList | Where-Object {$_.SideIndicator -eq "=>"} |
+                    Select @{Name="Account_ObjectClass";Expression={$null}}, `
+                    @{Name="Account_DNSRoot";Expression={$null}}, `
+                    @{Name="Account_RootSamAccountName";Expression={$null}}, `
+                    @{Name="Account_SamAccountName";Expression={$null}}, `
+                    @{Name="JoinAccount_ObjectClass";Expression={$_.ObjectClass}}, `
+                    @{Name="JoinAccount_SamAccountName";Expression={$_.SamAccountName}}, `
+                    @{Name="Account_Comment";Expression={$null}}, `
+                    @{Name="JoinAccount_Comment";Expression={$_.Comment}}, `
+                    @{Name="Account_DN";Expression={$null}}, `
+                    @{Name="Account_SID";Expression={$null}}, `
+                    @{Name="JoinAccount_DN";Expression={$_.DN}}, `
+                    @{Name="JoinAccount_DNSRoot";Expression={$_.DNSRoot}}, `
+                    @{Name="JoinAccount_RootSamAccountName";Expression={$_.RootSamAccountName}}, `
+                    @{Name="JoinAccount_SID";Expression={$_.SID}}
+                    $etime=(Get-Date)
+                    Write-Verbose "$($etime-$stime) Right Join Output Completed"
+            }
+            if($JoinType -eq "left" -or $JoinType -eq "full")
+            {
+            $stime=(Get-Date)
+                $Join_AccountList += $Compare_AccountList | Where-Object {$_.SideIndicator -eq "<="} |
                     Select @{Name="Account_ObjectClass";Expression={$_.ObjectClass}}, `
                     @{Name="Account_DNSRoot";Expression={$_.DNSRoot}}, `
                     @{Name="Account_RootSamAccountName";Expression={$_.RootSamAccountName}}, `
                     @{Name="Account_SamAccountName";Expression={$_.SamAccountName}}, `
-                    @{Name="JoinAccount_ObjectClass";Expression={$JoinAccount.ObjectClass}}, `
-                    @{Name="JoinAccount_SamAccountName";Expression={$JoinAccount.SamAccountName}}, `
+                    @{Name="JoinAccount_ObjectClass";Expression={$null}}, `
+                    @{Name="JoinAccount_SamAccountName";Expression={$null}}, `
                     @{Name="Account_Comment";Expression={$_.Comment}}, `
-                    @{Name="JoinAccount_Comment";Expression={$JoinAccount.Comment}}, `
+                    @{Name="JoinAccount_Comment";Expression={$null}}, `
                     @{Name="Account_DN";Expression={$_.DN}}, `
                     @{Name="Account_SID";Expression={$_.SID}}, `
-                    @{Name="JoinAccount_DN";Expression={$JoinAccount.DN}}, `                        
-                    @{Name="JoinAccount_DNSRoot";Expression={$JoinAccount.DNSRoot}}, `
-                    @{Name="JoinAccount_RootSamAccountName";Expression={$JoinAccount.RootSamAccountName}}, `
-                    @{Name="JoinAccount_SID";Expression={$JoinAccount.SID}}
+                    @{Name="JoinAccount_DN";Expression={$null}}, `
+                    @{Name="JoinAccount_DNSRoot";Expression={$null}}, `
+                    @{Name="JoinAccount_RootSamAccountName";Expression={$null}}, `
+                    @{Name="JoinAccount_SID";Expression={$null}}
+                    $etime=(Get-Date)
+                    Write-Verbose "$($etime-$stime) Left Join Output Completed"
+            }
+            $stime=(Get-Date)
+            foreach($AccountMatch in $($Compare_AccountList | Where-Object {$_.SideIndicator -eq "=="}))
+            {
+                $Accounts = $AccountList | Where-Object {$_.SID -eq $AccountMatch.SID}
+                $JoinAccounts = $JoinAccountList | Where-Object {$_.SID -eq $AccountMatch.SID}
+                foreach($Account in $Accounts)
+                {
+                    foreach($JoinAccount in $JoinAccounts)
+                    {
+                        $Join_AccountList += $Account | 
+                        Select @{Name="Account_ObjectClass";Expression={$_.ObjectClass}}, `
+                        @{Name="Account_DNSRoot";Expression={$_.DNSRoot}}, `
+                        @{Name="Account_RootSamAccountName";Expression={$_.RootSamAccountName}}, `
+                        @{Name="Account_SamAccountName";Expression={$_.SamAccountName}}, `
+                        @{Name="JoinAccount_ObjectClass";Expression={$JoinAccount.ObjectClass}}, `
+                        @{Name="JoinAccount_SamAccountName";Expression={$JoinAccount.SamAccountName}}, `
+                        @{Name="Account_Comment";Expression={$_.Comment}}, `
+                        @{Name="JoinAccount_Comment";Expression={$JoinAccount.Comment}}, `
+                        @{Name="Account_DN";Expression={$_.DN}}, `
+                        @{Name="Account_SID";Expression={$_.SID}}, `
+                        @{Name="JoinAccount_DN";Expression={$JoinAccount.DN}}, `                        
+                        @{Name="JoinAccount_DNSRoot";Expression={$JoinAccount.DNSRoot}}, `
+                        @{Name="JoinAccount_RootSamAccountName";Expression={$JoinAccount.RootSamAccountName}}, `
+                        @{Name="JoinAccount_SID";Expression={$JoinAccount.SID}}
+                    }
                 }
             }
-        }
+            $etime=(Get-Date)
+            Write-Verbose "$($etime-$stime) Equality Join Output Completed"
         
-        $AccountList = $Join_AccountList
+            $AccountList = $Join_AccountList
                    
+        }
     }
-
+    else
+    {
+        $AccountList = Get-UserGroupQuick $AccountName
+    }
+   
+     
     if($Output -eq "grid")
     {
         $AccountList | Sort-Object -Property dnsroot, account_dnsroot, joinaccount_dnsroot, rootsamaccountname, account_rootsamaccountname, `
@@ -265,6 +305,7 @@
     {
         return $AccountList
     }
+
 
 }
 
@@ -285,11 +326,13 @@ function Get-ADMembershipList
 
     $GroupList = $null
     $Global:ADListTable = @()
+    $Global:ADCache = @{}
                  
     #Search for users that match AccountName
     try
-    {
-        $UserList = Get-AdUser -Properties objectclass,sid,whenchanged,whencreated,samaccountname,displayname,enabled,distinguishedname,memberof,lastlogondate `        -Server $DomainServer -Filter {SamAccountName -like $AccountName}
+    { 
+        $UserList = Get-AdUser -Properties objectclass,sid,whenchanged,whencreated,samaccountname,displayname,enabled,distinguishedname,memberof,lastlogondate `
+        -Filter {SamAccountName -like $AccountName} #-Server $DomainServer        
     }
     catch
     {
@@ -330,7 +373,8 @@ function Get-ADMembershipList
                 foreach($Group in $UserGroupList)
                 {
                     #Traverse groups recursively for parent groups
-                    Get-ADNestedGroupMembers -SearchAccount $Group -Server $DomainServer -RootSamAccountName $ADListItem.RootSamAccountName -RootSID $ADListItem.RootSID `                    -Comment $ADListItem.Comment -MemberSearchMethod "membersof" -MemberSearchExclude $MemberSearchExclude
+                    Get-ADNestedGroupMembers -SearchAccount $Group -RootSamAccountName $ADListItem.RootSamAccountName -RootSID $ADListItem.RootSID `
+                    -Comment $ADListItem.Comment -MemberSearchMethod "membersof" -MemberSearchExclude $MemberSearchExclude #-Server $DomainServer
                 }
             }
         }
@@ -338,7 +382,8 @@ function Get-ADMembershipList
     #Search for groups that match AccountName
     try
     {
-        $GroupList = Get-AdGroup -Properties objectclass,sid,whenchanged,whencreated,samaccountname,displayname,enabled,distinguishedname,memberof,members `        -Server $DomainServer -Filter {SamAccountName -like $AccountName}
+        $GroupList = Get-AdGroup -Properties objectclass,sid,whenchanged,whencreated,samaccountname,displayname,enabled,distinguishedname,memberof,members `
+        -Filter {SamAccountName -like $AccountName} #-Server $DomainServer
     }
     catch
     {
@@ -376,7 +421,8 @@ function Get-ADMembershipList
                 foreach($Group in $UserGroupList)
                 {
                     #Traverse down to get members authorized through this group
-                    Get-ADNestedGroupMembers -SearchAccount $Group -Server $DomainServer -RootSamAccountName $ADListItem.RootSamAccountName -RootSID $ADListItem.RootSID `                    -Comment $ADListItem.Comment -MemberSearchMethod "members" -MemberSearchExclude $MemberSearchExclude
+                    Get-ADNestedGroupMembers -SearchAccount $Group -Server $DomainServer -RootSamAccountName $ADListItem.RootSamAccountName -RootSID $ADListItem.RootSID `
+                    -Comment $ADListItem.Comment -MemberSearchMethod "members" -MemberSearchExclude $MemberSearchExclude
                 }
             }
             #Check if search is limited to a search down the tree
@@ -387,7 +433,8 @@ function Get-ADMembershipList
                 foreach($Group in $UserGroupList)
                 {
                     #Traverse up to get all additional groups that could potentially supply rights to this group
-                    Get-ADNestedGroupMembers -SearchAccount $Group -Server $DomainServer -RootSamAccountName $ADListItem.RootSamAccountName -RootSID $ADListItem.RootSID `                    -Comment $ADListItem.Comment -MemberSearchMethod "membersof" -MemberSearchExclude $MemberSearchExclude
+                    Get-ADNestedGroupMembers -SearchAccount $Group -Server $DomainServer -RootSamAccountName $ADListItem.RootSamAccountName -RootSID $ADListItem.RootSID `
+                    -Comment $ADListItem.Comment -MemberSearchMethod "membersof" -MemberSearchExclude $MemberSearchExclude
                 }
             }
         }
@@ -416,14 +463,22 @@ function Get-ADNestedGroupMembers
     # only worries about getting groups up the tree
     if($MemberSearchMethod -eq "membersof")
     {
-        try
-        {
-            $MainGroup = Get-AdGroup $SearchAccount -Properties objectclass,sid,whenchanged,whencreated,samaccountname,displayname,enabled,distinguishedname,memberof -Server $Server
+        if ($Global:ADCache.ContainsKey($SearchAccount))
+        {   
+            $MainGroup = $Global:ADCache[$SearchAccount].Psobject.Copy()
         }
-        catch
+        else
         {
-            #Workout error list of groups that cannot be found
-            $MainGroup = $null
+            try
+            {
+                $MainGroup = Get-AdGroup -Identity $SearchAccount -Properties objectclass,sid,whenchanged,whencreated,samaccountname,displayname,enabled,distinguishedname,memberof #-Server $Server
+                $Global:ADCache.Add($MainGroup.DistinguishedName, $MainGroup)
+            }
+            catch
+            {
+                #Workout error list of groups that cannot be found
+                $MainGroup = $null
+            }
         }
 
             if($MainGroup)
@@ -446,9 +501,9 @@ function Get-ADNestedGroupMembers
 
                 #Add Group to List
                 $Global:ADListTable += new-object psobject -property $ADListItem
+                
                 #Obtain list of groups that the current group is a member of
                 $UserGroupList = $MainGroup | select -ExpandProperty memberof
-
                 foreach($Group in $UserGroupList)
                 {
                     #Traverse up to get all additional groups that could potentially supply rights to this group
@@ -466,15 +521,23 @@ function Get-ADNestedGroupMembers
     {
         if($MemberSearchExclude -ne "users")
         {
-            try
-            {
-                #check if user or group
-                $U = Get-ADUser $SearchAccount -Properties objectclass,sid,whenchanged,whencreated,samaccountname,displayname,enabled,distinguishedname,lastlogondate
+            if ($Global:ADCache.ContainsKey($SearchAccount))
+            {   
+                $U = $Global:ADCache[$SearchAccount].Psobject.Copy()
             }
-            catch
+            else
             {
-                #Workout list of users that cannot be found
-                $U=$null
+                try
+                {
+                    #check if user or group
+                    $U = Get-ADUser -Identity $SearchAccount -Properties objectclass,sid,whenchanged,whencreated,samaccountname,displayname,enabled,distinguishedname,lastlogondate
+                    $Global:ADCache.Add($U.DistinguishedName, $U)
+                }
+                catch
+                {
+                    #Workout list of users that cannot be found
+                    $U=$null
+                }
             }
             if($U)
             {
@@ -502,14 +565,22 @@ function Get-ADNestedGroupMembers
             }
         }
 
-        try
-        {
-            $Gl = Get-ADGroup $SearchAccount -Properties objectclass,sid,whenchanged,whencreated,samaccountname,displayname,enabled,distinguishedname,members
+        if ($Global:ADCache.ContainsKey($SearchAccount))
+        {   
+            $Gl = $Global:ADCache[$SearchAccount].Psobject.Copy()
         }
-        catch
+        else
         {
-            #Workout list of groups that cannot be found
-            $Gl=$null
+            try
+            {
+                $Gl = Get-ADGroup -Identity $SearchAccount -Properties objectclass,sid,whenchanged,whencreated,samaccountname,displayname,enabled,distinguishedname,members
+                $Global:ADCache.Add($Gl.DistinguishedName, $Gl)
+            }
+            catch
+            {
+                #Workout list of groups that cannot be found
+                $Gl=$null
+            }
         }
         foreach($G in $Gl)
         {
@@ -537,8 +608,83 @@ function Get-ADNestedGroupMembers
             $UserGroupList = $G | select -ExpandProperty members
                 foreach($Group in $UserGroupList)
                 {
-                    Get-ADNestedGroupMembers -SearchAccount $Group -Server $ADListItem.DNSRoot -RootSamAccountName $RootSamAccountName -RootSID $RootSID `                    -Comment $ADListItem.Comment -MemberSearchMethod "members" -MemberSearchExclude $MemberSearchExclude
+                    Get-ADNestedGroupMembers -SearchAccount $Group -Server $ADListItem.DNSRoot -RootSamAccountName $RootSamAccountName -RootSID $RootSID `
+                    -Comment $ADListItem.Comment -MemberSearchMethod "members" -MemberSearchExclude $MemberSearchExclude
                 }
         }
     }
 }
+
+function Get-UserGroupQuick {
+#Modified version of script by Vadims Podans
+#https://www.sysadmins.lv/blog-en/efficient-way-to-get-ad-user-membership-recursively-with-powershell.aspx
+    param(
+        [Parameter(Mandatory = $true, ValueFromPipeline = $false)]
+        [String[]]$UserName
+    )
+    begin {
+        # introduce two lookup hashtables. First will contain cached AD groups,
+        # second will contain user groups. We will reuse it for each user.
+        # format: Key = group distinguished name, Value = ADGroup object
+        $ADGroupCache = @{}
+        $UserGroups = @{}
+        $OutObject = @()
+        # define recursive function to recursively process groups.
+        function __findPath ([string]$currentGroup, [string]$comment) {
+            Write-Verbose "Processing group: $currentGroup"
+            # we must do processing only if the group is not already processed.
+            # otherwise we will get an infinity loop
+            if (!$UserGroups.ContainsKey($currentGroup)) {
+                # retrieve group object, either, from cache (if is already cached)
+                # or from Active Directory
+                $groupObject = if ($ADGroupCache.ContainsKey($currentGroup)) {
+                    Write-Verbose "Found group in cache: $currentGroup"
+                    $ADGroupCache[$currentGroup].Psobject.Copy()
+                } else {
+                    Write-Verbose "Group: $currentGroup is not presented in cache. Retrieve and cache."
+                    
+                    $g = Get-ADGroup -Identity $currentGroup -Property objectclass,sid,whenchanged,whencreated,samaccountname,displayname,enabled,distinguishedname,memberof
+                    # immediately add group to local cache:
+                    
+                    $ADGroupCache.Add($g.DistinguishedName, $g)
+                    $g
+                }
+                
+                $c = $comment + "->" + $groupObject.SamAccountName
+                
+                $UserGroups.Add($c, $groupObject)
+                                
+                Write-Verbose "Membership Path:  $c"
+                foreach ($p in $groupObject.MemberOf) {
+                       __findPath $p $c
+                }
+            } else {Write-Verbose "Closed walk or duplicate on '$currentGroup'. Skipping."}
+        }
+    }
+    process {
+    $stime=(Get-Date)
+        foreach ($user in $UserName) {
+            Write-Verbose "========== $user =========="
+            # clear group membership prior to each user processing
+            $UserObject = Get-ADUser -Identity $user -Property objectclass,sid,whenchanged,whencreated,samaccountname,displayname,enabled,distinguishedname,memberof
+            $UserObject.MemberOf | ForEach-Object {__findPath $_ $UserObject.SamAccountName}
+}
+            foreach($g in $UserGroups.GetEnumerator())
+            {
+                $OutObject += [pscustomobject]@{
+                    ObjectClass = $g.value.ObjectClass;
+                    RootSamAccountName = $UserObject.SamAccountName;
+                    MemberOf = $g.value.SamAccountName;
+                    DisplayName = $g.value.DisplayName;
+                    Comment = $g.key;
+                    Enabled = $g.value.enabled;
+                    WhenChanged = $g.value.WhenChanged;
+                    WhenCreated = $g.value.WhenCreated;
+                    SID = $g.value.sid;
+                }
+            }
+            $etime=(Get-Date)
+            Write-Verbose "$($etime-$stime) Speedy Search Completed"
+            return $OutObject
+        }
+    }
