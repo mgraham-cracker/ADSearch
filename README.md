@@ -132,3 +132,11 @@
         The default value is grid which is intended for interactive use
 
         Note: Data in the output grid can be copied to the clipboard, filtered, and columns rearranged.
+        
+    .PARAMETER Mode
+        'Mode' [string] Values allowed are "speed" or "robust"
+
+        The default value is speed which is intended to perform a quick memberof search for a user. This feature presumes you do
+        not wish to perform comparison or multi-direction searches
+
+        Note: If you specify a value for JoinAccountName then the mode will be overridden to robust
